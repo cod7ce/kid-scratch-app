@@ -79,17 +79,28 @@ async function fetchLatest () {
     if (!resp.ok) throw new Error(`GitHub 返回 ${resp.status}`);
     const releases = await resp.json();
     if (!Array.isArray(releases) || !releases.length) throw new Error('还没有发布过任何版本');
+    const picked = pickRelease(releases);
+    if (!picked) throw new Error('还没有可用的正式版本');
+    return picked;
+}
 
+/**
+ * 从 Release 列表里挑出该升级到哪一个。
+ * 同一个 tag 可能存在多个 Release（electron-builder 并行发布时会这样），
+ * 其中可能只有一个带安装包，所以同版本要优先选带安装包的那个。
+ */
+function pickRelease (releases) {
     const usable = releases
-        .filter(r => !r.draft && !r.prerelease && parseVersion(r.tag_name))
+        .filter(r => r && !r.draft && !r.prerelease && parseVersion(r.tag_name))
         .map(describeRelease)
-        .sort((a, b) => (isNewer(a.version, b.version) ? -1 : 1));
-    if (!usable.length) throw new Error('还没有可用的正式版本');
-
-    // 同一个 tag 可能有多个 Release，优先挑带安装包的那个
+        .sort((a, b) => {
+            if (isNewer(a.version, b.version)) return -1;
+            if (isNewer(b.version, a.version)) return 1;
+            return 0;
+        });
+    if (!usable.length) return null;
     const newest = usable[0];
-    const withAsset = usable.find(r => r.asset && !isNewer(newest.version, r.version));
-    return withAsset || newest;
+    return usable.find(r => r.asset && !isNewer(newest.version, r.version)) || newest;
 }
 
 /**
@@ -329,6 +340,7 @@ function start () {
 
 module.exports = {
     start,
+    pickRelease,
     checkForUpdates,
     installPending,
     getState: () => state,

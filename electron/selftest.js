@@ -57,7 +57,19 @@ async function runSelfTest (win, origin) {
         check('渲染器可用（WebGL）', base.hasRenderer);
         check('界面为中文', base.chinese);
 
-        const { isNewer } = require('./updater');
+        const { isNewer, pickRelease } = require('./updater');
+        // 同一个 tag 有两个 Release、其中一个只有 blockmap 时，必须挑到带安装包的那个
+        const zip = n => ({ name: n, state: 'uploaded', browser_download_url: 'https://x/' + n, size: 1 });
+        const picked = pickRelease([
+            { tag_name: 'v0.1.1', draft: false, prerelease: false, assets: [zip('KidScratch-0.1.1-mac-arm64.zip.blockmap')] },
+            { tag_name: 'v0.1.1', draft: false, prerelease: false, assets: [zip(`KidScratch-0.1.1-mac-${process.arch}.zip`)] },
+            { tag_name: 'v0.1.0', draft: false, prerelease: false, assets: [zip(`KidScratch-0.1.0-mac-${process.arch}.zip`)] },
+            { tag_name: 'v9.9.9', draft: true, prerelease: false, assets: [zip(`KidScratch-9.9.9-mac-${process.arch}.zip`)] }
+        ]);
+        check('能从重复/残缺的 Release 里挑对',
+            !!picked && picked.version === '0.1.1' && !!picked.asset && picked.asset.name.endsWith(`-mac-${process.arch}.zip`),
+            picked && { version: picked.version, asset: picked.asset && picked.asset.name });
+
         check('版本号比较正确',
             isNewer('1.0.1', '1.0.0') && isNewer('1.1.0', '1.0.9') && isNewer('2.0.0', '1.9.9') &&
             isNewer('1.0.0', '1.0.0-beta.1') && !isNewer('1.0.0', '1.0.0') && !isNewer('0.9.9', '1.0.0') &&
