@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob:">
+<title>小小创客 · 编辑器</title>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/editor.css">
+</head>
+<body class="editor-body">
+
+<header class="topbar">
+    <button class="tb-btn tb-back" id="btn-home" title="回到作品墙">
+        <span class="tb-ico">🏠</span><span class="tb-label">作品墙</span>
+    </button>
+
+    <button class="tb-title" id="btn-rename" title="点一下改名字">
+        <span id="project-name">作品</span><span class="pencil">✏️</span>
+    </button>
+
+    <div class="save-badge" id="save-badge" data-state="idle">
+        <span class="dot"></span><span id="save-text">准备中…</span>
+    </div>
+
+    <div class="tb-right">
+        <button class="tb-btn" id="btn-library"><span class="tb-ico">🧺</span><span class="tb-label">我的素材</span></button>
+        <button class="tb-btn" id="btn-history"><span class="tb-ico">🕘</span><span class="tb-label">历史版本</span></button>
+        <button class="tb-btn" id="btn-save"><span class="tb-ico">💾</span><span class="tb-label">保存</span></button>
+        <button class="tb-btn" id="btn-fullscreen"><span class="tb-ico">⛶</span><span class="tb-label">全屏</span></button>
+    </div>
+</header>
+
+<main id="gui"></main>
+
+<div class="boot" id="boot">
+    <div class="boot-cat">🐱</div>
+    <div class="boot-text">正在准备积木…</div>
+    <div class="boot-bar"><i></i></div>
+</div>
+
+<!-- 素材库 -->
+<div class="overlay" id="library-overlay" hidden>
+    <div class="lib">
+        <div class="lib-head">
+            <h3>🧺 我的素材库</h3>
+            <div class="lib-tabs">
+                <button class="lib-tab active" data-kind="sprites">角色</button>
+                <button class="lib-tab" data-kind="backdrops">背景</button>
+                <button class="lib-tab" data-kind="sounds">声音</button>
+            </div>
+            <input type="text" class="lib-search" id="lib-search" placeholder="搜一搜…">
+            <button class="tb-btn" id="lib-add">＋ 加素材</button>
+            <button class="lib-close" id="lib-close">✕</button>
+        </div>
+        <div class="lib-body" id="lib-body"></div>
+        <div class="lib-foot">
+            提示：把自己画的图片 / 录的声音放进「我的素材」文件夹，这里就能看到啦。
+            <button class="link" id="lib-open-folder">打开文件夹</button>
+        </div>
+    </div>
+</div>
+
+<!-- 历史版本 -->
+<div class="overlay" id="history-overlay" hidden>
+    <div class="dialog" style="width:min(560px,calc(100vw - 48px))">
+        <h3>🕘 历史版本</h3>
+        <p class="hint">编辑过程中每 5 分钟会自动留一个存档，最多保留 20 个。</p>
+        <div class="history-list" id="history-list"></div>
+        <div class="dialog-actions"><button class="btn btn-ghost" id="history-close">关闭</button></div>
+    </div>
+</div>
+
+<!-- 改名 -->
+<div class="overlay" id="rename-overlay" hidden>
+    <div class="dialog">
+        <h3>给作品换个名字</h3>
+        <input type="text" id="rename-input" maxlength="40">
+        <div class="dialog-actions">
+            <button class="btn btn-ghost" id="rename-cancel">取消</button>
+            <button class="btn btn-primary" id="rename-ok">好啦</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/vendor/react/react.production.min.js"></script>
+<script src="/vendor/react-dom/react-dom.production.min.js"></script>
+<script src="/js/react-globals.js"></script>
+<script src="/gui/scratch-gui.js"></script>
+<script src="/js/editor.js"></script>
+</body>
+</html>

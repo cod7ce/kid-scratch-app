@@ -1,0 +1,104 @@
+{
+  "name": "kid-scratch-app",
+  "productName": "小小创客",
+  "version": "1.0.0",
+  "description": "给孩子的 Scratch 图形化编程创作 App（本地运行 / 自动保存 / 儿童素材库）",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "selftest": "KID_SELFTEST=1 electron .",
+    "fetch-assets": "node scripts/fetch-assets.mjs",
+    "dist": "electron-builder --mac",
+    "dist:all": "electron-builder --mac --win",
+    "release": "electron-builder --mac --publish always",
+    "icon": "electron scripts/make-icon.js"
+  },
+  "dependencies": {
+    "react": "^16.14.0",
+    "react-dom": "^16.14.0",
+    "scratch-gui": "^5.3.0"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.cod7ce.kidscratch",
+    "productName": "小小创客",
+    "copyright": "Copyright © 2026 cod7ce",
+    "artifactName": "KidScratch-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "!**/*",
+      "electron/**",
+      "renderer/**",
+      "library/**",
+      "package.json",
+      "node_modules/scratch-gui/package.json",
+      "node_modules/scratch-gui/dist/**",
+      "node_modules/react/package.json",
+      "node_modules/react/umd/react.production.min.js",
+      "node_modules/react-dom/package.json",
+      "node_modules/react-dom/umd/react-dom.production.min.js",
+      "!node_modules/scratch-gui/dist/static/assets/*.{am,ar,es,fr,ja,pt_BR,sw,tr,uk,zu}.*.png"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "cod7ce",
+        "repo": "kid-scratch-app"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.education",
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "darkModeSupport": false
+    },
+    "dmg": {
+      "title": "小小创客 ${version}"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "KidScratch-${version}-setup.${ext}"
+    }
+  },
+  "author": {
+    "name": "cod7ce",
+    "email": "cod7ce@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cod7ce/kid-scratch-app.git"
+  },
+  "license": "AGPL-3.0-only"
+}

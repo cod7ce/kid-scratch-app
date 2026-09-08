@@ -1,0 +1,124 @@
+{
+  "sprites": [
+    {
+      "file": "cat.svg",
+      "name": "小猫"
+    },
+    {
+      "file": "dog.svg",
+      "name": "小狗"
+    },
+    {
+      "file": "dino.svg",
+      "name": "小恐龙"
+    },
+    {
+      "file": "rocket.svg",
+      "name": "火箭"
+    },
+    {
+      "file": "star.svg",
+      "name": "星星"
+    },
+    {
+      "file": "heart.svg",
+      "name": "爱心"
+    },
+    {
+      "file": "balloon.svg",
+      "name": "气球"
+    },
+    {
+      "file": "apple.svg",
+      "name": "苹果"
+    },
+    {
+      "file": "robot.svg",
+      "name": "机器人"
+    },
+    {
+      "file": "ball.svg",
+      "name": "足球"
+    },
+    {
+      "file": "icecream.svg",
+      "name": "冰淇淋"
+    },
+    {
+      "file": "sun.svg",
+      "name": "太阳"
+    },
+    {
+      "file": "fish.svg",
+      "name": "小鱼"
+    },
+    {
+      "file": "butterfly.svg",
+      "name": "蝴蝶"
+    }
+  ],
+  "backdrops": [
+    {
+      "file": "grass.svg",
+      "name": "蓝天草地"
+    },
+    {
+      "file": "night.svg",
+      "name": "星空夜晚"
+    },
+    {
+      "file": "sea.svg",
+      "name": "海底世界"
+    },
+    {
+      "file": "space.svg",
+      "name": "外太空"
+    },
+    {
+      "file": "rainbow.svg",
+      "name": "彩虹"
+    },
+    {
+      "file": "stage.svg",
+      "name": "小舞台"
+    },
+    {
+      "file": "road.svg",
+      "name": "马路"
+    }
+  ],
+  "sounds": [
+    {
+      "file": "ding.wav",
+      "name": "叮"
+    },
+    {
+      "file": "pop.wav",
+      "name": "啵"
+    },
+    {
+      "file": "jump.wav",
+      "name": "跳一下"
+    },
+    {
+      "file": "whoosh.wav",
+      "name": "咻"
+    },
+    {
+      "file": "win.wav",
+      "name": "过关啦"
+    },
+    {
+      "file": "lose.wav",
+      "name": "哎呀"
+    },
+    {
+      "file": "meow.wav",
+      "name": "喵"
+    },
+    {
+      "file": "drum.wav",
+      "name": "咚"
+    }
+  ]
+}

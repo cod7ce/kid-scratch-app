@@ -1,0 +1,18 @@
+小小创客 (Kid Scratch App)
+Copyright (C) 2026 cod7ce
+
+本程序是自由软件：你可以依据自由软件基金会发布的 GNU Affero 通用公共许可证
+第 3 版的条款重新分发和/或修改它。完整条款见 LICENSE 文件。
+
+本程序内嵌了以下上游项目的预编译产物：
+
+  scratch-gui / scratch-vm / scratch-blocks / scratch-render 等
+  Copyright (c) Scratch Foundation / Massachusetts Institute of Technology
+  License: GNU Affero General Public License v3.0 only
+  https://github.com/scratchfoundation/scratch-editor
+
+Scratch 商标（包括 Scratch 名称、标志、Scratch Cat 等图形）归 MIT 所有。
+未经事先书面许可，不得使用这些商标为本软件背书或推广。
+本项目与 Scratch 团队无隶属关系，也未获其背书。
+
+library/ 目录下的角色、背景、音效由本项目自行绘制/合成，同样以 AGPL-3.0 发布。

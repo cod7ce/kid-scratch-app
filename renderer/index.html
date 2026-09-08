@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'">
+<title>小小创客 · 我的作品墙</title>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/home.css">
+</head>
+<body>
+<div class="page">
+    <div class="hero">
+        <div class="hero-text">
+            <h1>🎨 小小创客</h1>
+            <p>用积木搭出你自己的动画和小游戏 · 作品会自动保存，不怕丢</p>
+        </div>
+        <div class="hero-actions">
+            <button class="btn btn-ghost" id="btn-import">📥 导入作品</button>
+            <button class="btn btn-ghost" id="btn-assets">🧺 我的素材</button>
+            <button class="btn btn-ghost" id="btn-folder">📂 作品文件夹</button>
+        </div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <div class="footer-note" id="footer-note"></div>
+</div>
+
+<div class="overlay" id="rename-overlay" hidden>
+    <div class="dialog">
+        <h3 id="rename-title">给作品起个名字</h3>
+        <input type="text" id="rename-input" maxlength="40" placeholder="例如：会跳舞的小猫">
+        <div class="dialog-actions">
+            <button class="btn btn-ghost" id="rename-cancel">取消</button>
+            <button class="btn btn-primary" id="rename-ok">好啦</button>
+        </div>
+    </div>
+</div>
+
+<div class="update-card" id="update-card" hidden>
+    <div class="uc-icon">🎁</div>
+    <div class="uc-body">
+        <div class="uc-title" id="uc-title">有新版本</div>
+        <div class="uc-sub" id="uc-sub">点一下就能更新</div>
+        <div class="uc-bar" id="uc-bar" hidden><i id="uc-bar-fill"></i></div>
+    </div>
+    <button class="btn btn-primary uc-btn" id="uc-action">更新</button>
+    <button class="uc-close" id="uc-dismiss" title="以后再说">✕</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/js/home.js"></script>
+</body>
+</html>
