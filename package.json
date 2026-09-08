@@ -50,7 +50,8 @@
       {
         "provider": "github",
         "owner": "cod7ce",
-        "repo": "kid-scratch-app"
+        "repo": "kid-scratch-app",
+        "releaseType": "release"
       }
     ],
     "mac": {

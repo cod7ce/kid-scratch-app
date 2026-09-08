@@ -298,6 +298,15 @@ async function installPending () {
 
 function start () {
     if (!app.isPackaged && !process.env.KID_UPDATE_DEV) return;
+    // 调试用：KID_UPDATE_FORCE=1 启动即检查，有新版就直接装（正常使用不需要）
+    if (process.env.KID_UPDATE_FORCE === '1') {
+        setTimeout(async () => {
+            await checkForUpdates({ silent: true }).catch(() => {});
+            if (state.pending) await downloadAndInstall(state.pending).catch(() => {});
+            else console.log('[更新] 没有可用的新版本');
+        }, 2000);
+        return;
+    }
     setTimeout(() => checkForUpdates({ silent: true }).catch(() => {}), FIRST_CHECK_DELAY);
     setInterval(() => checkForUpdates({ silent: true }).catch(() => {}), CHECK_INTERVAL);
 }
