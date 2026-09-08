@@ -8,7 +8,7 @@
 
 ## 安装（普通使用）
 
-到 [Releases](https://github.com/cod7ce/kid-scratch-app/releases/latest) 下载 `KidScratch-<版本>-mac-arm64.dmg`，拖进「应用程序」。
+到 [Releases](https://github.com/cod7ce/kid-scratch-app/releases/latest) 下载 `KidScratch-<版本>-mac-arm64.dmg`（Apple Silicon），拖进「应用程序」。
 
 App 没有 Apple Developer ID 签名，第一次打开会被 Gatekeeper 拦下，任选一种放行：
 
@@ -101,7 +101,7 @@ App 每 6 小时（以及启动后 20 秒）静默检查一次 GitHub Releases�
 
 > 如果以后买了 Apple Developer 账号（Developer ID + 公证），可以换回 `electron-updater`，会更省流量（支持差分更新）。
 
-**已实测**：v1.0.0 的 App 自动发现 v1.0.1 → 下载 139MB → 解压 → 原地替换 → 自动重启，升级后 20 项自检全部通过。
+**已实测**：装好的旧版 App 能自动发现新版 → 下载约 139MB → 解压 → 原地替换 → 自动重启，升级完成后 20 项自检全部通过。
 
 ## 打包 & 发布
 
