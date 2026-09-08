@@ -23,9 +23,27 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      # 必须先把 Release 建出来：electron-builder 对 dmg / zip 是并行发布的，
+      # Release 不存在时两个 publisher 会各建一个，同一 tag 出现两个 Release，
+      # /releases/latest 可能返回那个没有安装包的空壳，导致自动更新失效。
+      - name: 先建好 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+
       - name: 打包并发布到 Release
         # 没有 Developer ID 证书，跳过签名；electron-builder 会做 ad-hoc 签名，App 能在本机运行
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npx electron-builder --mac --publish always
+
+      - name: 校验同一 tag 只有一个 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COUNT=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq "[.[] | select(.tag_name == \"$GITHUB_REF_NAME\")] | length")
+          echo "tag $GITHUB_REF_NAME 下有 $COUNT 个 Release"
+          test "$COUNT" = "1"

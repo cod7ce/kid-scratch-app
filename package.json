@@ -11,7 +11,7 @@
     "fetch-assets": "node scripts/fetch-assets.mjs",
     "dist": "electron-builder --mac",
     "dist:all": "electron-builder --mac --win",
-    "release": "electron-builder --mac --publish always",
+    "release": "bash scripts/release.sh",
     "icon": "electron scripts/make-icon.js"
   },
   "dependencies": {

@@ -117,13 +117,23 @@ npm version patch          # 或 minor / major，改 package.json 并打好 tag
 git push --follow-tags     # 推 tag 触发 CI，构建完自动发布
 ```
 
-要在本地发布（`npm run release`），**必须先把 tag 推上去**——配置里 `releaseType: "release"` 表示直接发正式版，
-而 GitHub 要求正式 Release 的 tag 必须已存在（草稿模式才会顺手建 tag）：
+本地发布用 `npm run release`（`scripts/release.sh`），它会按正确顺序来：推 tag → 建 Release → 再打包上传。
 
 ```bash
-npm version patch && git push --follow-tags
+npm version patch
 npm run release
 ```
+
+**顺序不能颠倒**，这里踩过两个坑：
+
+1. `releaseType: "release"` 表示直接发正式版，而 GitHub 要求正式 Release 的 tag 必须已存在（草稿模式才会顺手建 tag），否则报
+   `422 Published releases must have a valid tag`。
+2. electron-builder 对 dmg / zip 两个 target 是**并行发布**的。如果 Release 还不存在，两个 publisher 会各建一个，
+   同一个 tag 下就出现**两个 Release**，而 `/releases/latest` 可能正好返回那个只有 blockmap、没有安装包的空壳，
+   自动更新就会一直「找不到安装包」。发布脚本和 CI 都会在结束时校验「同一 tag 只有一个 Release」。
+
+客户端这边也做了兜底：`updater.js` 不用 `/releases/latest`，而是拉最近 10 个 Release 自己挑——
+过滤掉草稿和预发布，按版本排序，同版本优先选**带安装包**的那个。
 
 工作流在 `.github/workflows/release.yml`（macOS arm64；要出 Intel 版把 `mac.target` 的 arch 加上 `x64`，要出 Windows 版加一个 `windows-latest` 的 job 跑 `--win`）。
 

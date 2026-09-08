@@ -10,10 +10,7 @@ const { spawn, execFile } = require('child_process');
 const { app, dialog, shell, BrowserWindow } = require('electron');
 
 const REPO = 'cod7ce/kid-scratch-app';
-// 取最近若干个 Release 自己挑，而不是用 /releases/latest：
-// electron-builder 对多个 target 并行发布时可能给同一个 tag 建出两个 Release，
-// /releases/latest 有可能正好返回那个只有 blockmap、没有安装包的空壳。
-const API = `https://api.github.com/repos/${REPO}/releases?per_page=10`;
+const API = `https://api.github.com/repos/${REPO}/releases/latest`;
 const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
 const CHECK_INTERVAL = 6 * 60 * 60 * 1000; // 6 小时
 const FIRST_CHECK_DELAY = 20 * 1000;
@@ -56,18 +53,6 @@ function assetPattern () {
     return null;
 }
 
-function describeRelease (release) {
-    const pattern = assetPattern();
-    const asset = pattern && (release.assets || []).find(a => pattern.test(a.name) && a.state === 'uploaded');
-    return {
-        version: String(release.tag_name || '').replace(/^v/, ''),
-        notes: release.body || '',
-        publishedAt: release.published_at,
-        pageUrl: release.html_url || RELEASES_PAGE,
-        asset: asset ? { name: asset.name, url: asset.browser_download_url, size: asset.size } : null
-    };
-}
-
 async function fetchLatest () {
     const resp = await fetch(API, {
         headers: {
@@ -77,19 +62,18 @@ async function fetchLatest () {
     });
     if (resp.status === 404) throw new Error('还没有发布过任何版本');
     if (!resp.ok) throw new Error(`GitHub 返回 ${resp.status}`);
-    const releases = await resp.json();
-    if (!Array.isArray(releases) || !releases.length) throw new Error('还没有发布过任何版本');
+    const release = await resp.json();
+    if (release.draft) throw new Error('最新的发布还是草稿');
 
-    const usable = releases
-        .filter(r => !r.draft && !r.prerelease && parseVersion(r.tag_name))
-        .map(describeRelease)
-        .sort((a, b) => (isNewer(a.version, b.version) ? -1 : 1));
-    if (!usable.length) throw new Error('还没有可用的正式版本');
-
-    // 同一个 tag 可能有多个 Release，优先挑带安装包的那个
-    const newest = usable[0];
-    const withAsset = usable.find(r => r.asset && !isNewer(newest.version, r.version));
-    return withAsset || newest;
+    const pattern = assetPattern();
+    const asset = pattern && (release.assets || []).find(a => pattern.test(a.name));
+    return {
+        version: String(release.tag_name || '').replace(/^v/, ''),
+        notes: release.body || '',
+        publishedAt: release.published_at,
+        pageUrl: release.html_url || RELEASES_PAGE,
+        asset: asset ? { name: asset.name, url: asset.browser_download_url, size: asset.size } : null
+    };
 }
 
 /**
