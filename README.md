@@ -81,7 +81,13 @@ npm run fetch-assets -- 背景     # 也可以只下某一类：角色 / 造型 
 npm run selftest
 ```
 
-会真的启动一次 App，逐项验证：编辑器挂载、中文界面、WebGL 渲染、素材代理、添加角色/背景/声音、自动保存链路、`.sb3` 落盘与读回、缩略图生成。当前 19/19 通过。
+会真的启动一次 App，逐项验证：编辑器挂载、中文界面、WebGL 渲染、素材代理、添加角色/背景/声音、自动保存链路、`.sb3` 落盘与读回、缩略图生成、版本号比较。当前 20/20 通过。
+
+打包后的 App 也能这么测：
+
+```bash
+KID_SELFTEST=1 /Applications/小小创客.app/Contents/MacOS/小小创客
+```
 
 加上 `KID_SHOT_DIR=/tmp/shots` 还会顺便截三张图（编辑器 / 素材库 / 作品墙）。
 
@@ -91,7 +97,11 @@ App 每 6 小时（以及启动后 20 秒）静默检查一次 GitHub Releases�
 
 实现在 `electron/updater.js`，**没有用 `electron-updater`**：它在 macOS 上依赖 Squirrel.Mac，而 Squirrel.Mac 要求 App 有有效的 Developer ID 签名；本项目只有 Apple Development 证书，所以改成直接读 GitHub Releases API + 自己做替换。替换脚本会先把旧 App 改名备份，`ditto` 成功才删备份，失败则回滚，不会把 App 弄坏。
 
+调试用：`KID_UPDATE_FORCE=1 /Applications/小小创客.app/Contents/MacOS/小小创客` 会跳过等待，启动即检查，有新版就直接装。
+
 > 如果以后买了 Apple Developer 账号（Developer ID + 公证），可以换回 `electron-updater`，会更省流量（支持差分更新）。
+
+**已实测**：v1.0.0 的 App 自动发现 v1.0.1 → 下载 139MB → 解压 → 原地替换 → 自动重启，升级后 20 项自检全部通过。
 
 ## 打包 & 发布
 
