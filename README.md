@@ -113,8 +113,16 @@ npm run icon        # 重新生成 build/icon.png 和 icon.icns
 发新版本只要打个 tag，GitHub Actions 会自动构建并上传到 Release：
 
 ```bash
-npm version patch   # 或 minor / major，会自动改 package.json 并打 tag
-git push --follow-tags
+npm version patch          # 或 minor / major，改 package.json 并打好 tag
+git push --follow-tags     # 推 tag 触发 CI，构建完自动发布
+```
+
+要在本地发布（`npm run release`），**必须先把 tag 推上去**——配置里 `releaseType: "release"` 表示直接发正式版，
+而 GitHub 要求正式 Release 的 tag 必须已存在（草稿模式才会顺手建 tag）：
+
+```bash
+npm version patch && git push --follow-tags
+npm run release
 ```
 
 工作流在 `.github/workflows/release.yml`（macOS arm64；要出 Intel 版把 `mac.target` 的 arch 加上 `x64`，要出 Windows 版加一个 `windows-latest` 的 job 跑 `--win`）。
