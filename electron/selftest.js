@@ -77,6 +77,25 @@ async function runSelfTest (win, origin) {
         check('积木图标资源可用', media.every(x => x === 200), media);
         check('启动遮罩已移除', await win.webContents.executeJavaScript('!document.getElementById("boot")'));
 
+        // 官方素材库的缩略图走的是写死的 CDN 地址，必须被重定向到本地代理才能显示
+        await win.webContents.executeJavaScript(`(() => {
+            const btns = [...document.querySelectorAll('[class*="action-menu_main-button"]')];
+            const target = btns[btns.length - 1];
+            if (target) target.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+            return !!target;
+        })()`);
+        await new Promise(r => setTimeout(r, 6000));
+        const thumbs = await win.webContents.executeJavaScript(`(() => {
+            const imgs = [...document.querySelectorAll('[class*="library-item"] img')];
+            return { count: imgs.length, broken: imgs.filter(i => i.complete && i.naturalWidth === 0).length };
+        })()`);
+        check('官方素材库缩略图正常', thumbs.count > 50 && thumbs.broken === 0, thumbs);
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+        await new Promise(r => setTimeout(r, 800));
+        check('素材库可关闭', await win.webContents.executeJavaScript(
+            'document.querySelectorAll(\'[class*="library-item"]\').length === 0'));
+
         const add = await win.webContents.executeJavaScript(`(async () => {
             const before = window.vm.runtime.targets.length;
             const lib = await fetch('/api/library').then(r => r.json());

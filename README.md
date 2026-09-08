@@ -129,6 +129,8 @@ npm run release
 
 `.zip` 是自动更新用的，`.dmg` 是给人下载的，两个都会传。
 
+跑 `npm run fetch-assets` 预下载后，官方素材库的**缩略图和素材本体都会走本地缓存**，断网也能正常浏览和选用。
+
 ## 体积
 
 打包后 App 约 305MB、安装包约 140MB。其中 Electron 运行时占大头，`scratch-gui` 的预编译产物约 52MB。
@@ -139,6 +141,7 @@ npm run release
 - **Electron 主进程** (`electron/main.js`)：窗口、菜单、文件读写 IPC、关窗前强制落盘
 - **本地 HTTP 服务器** (`electron/server.js`)：随机端口只监听 `127.0.0.1`，托管界面 + `scratch-gui` 产物 + 素材；用 http 而不是 `file://` 是因为 scratch-gui 依赖 fetch、Worker 和跨目录资源
   - `/scratch-assets/internalapi/asset/<md5ext>/get/` 是官方素材的缓存代理：先查本地，未命中才联网并落盘
+- **素材库缩略图**：scratch-gui 里素材库网格的缩略图 URL 是**写死的 `https://cdn.assets.scratch.mit.edu/...`**，不走 `assetHost`。主进程用 `webRequest.onBeforeRequest` 把这些请求重定向到上面的本地代理（CSP 里也要放行这两个源，否则渲染进程在发请求前就把图片拦了），这样缩略图同样能命中缓存、离线可用
   - `/static/` 额外挂了一份 `dist/static`，因为 scratch-blocks 内部写死了相对路径 `./static/blocks-media/...`
 - **渲染进程** (`renderer/js/editor.js`)：用 UMD 方式加载 `scratch-gui.js`（它把 react / react-dom 作为外部依赖，读的是小写全局 `window.react`）
   - `projectId: 0` 让 GUI 加载内置的默认作品（离线）

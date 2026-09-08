@@ -49,6 +49,17 @@ async function boot () {
         }
     });
 
+    // 素材库的缩略图在 scratch-gui 里是写死的 CDN 地址（不走 assetHost），
+    // 统一重定向到本地缓存代理：这样缩略图也能命中缓存、离线可用。
+    mainWindow.webContents.session.webRequest.onBeforeRequest(
+        { urls: ['*://cdn.assets.scratch.mit.edu/internalapi/asset/*', '*://assets.scratch.mit.edu/internalapi/asset/*'] },
+        (details, callback) => {
+            const m = /\/internalapi\/asset\/([^/?#]+)/.exec(details.url);
+            if (!m) return callback({});
+            callback({ redirectURL: `${origin}/scratch-assets/internalapi/asset/${m[1]}/get/` });
+        }
+    );
+
     mainWindow.once('ready-to-show', () => mainWindow.show());
     mainWindow.on('close', onWindowClose);
 
