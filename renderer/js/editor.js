@@ -181,6 +181,7 @@ function mountGui () {
             // 所有官方素材都走本地服务器：命中缓存直接读盘，没有才联网下载并存下来
             st.setAssetHost(`${location.origin}/scratch-assets`);
             st.addOfficialScratchWebStores();
+            useMainThreadFetch(st);
         },
         onVmInit: instance => {
             vm = instance;
@@ -188,6 +189,22 @@ function mountGui () {
             instance.setCompatibilityMode(true);
         }
     }), target);
+}
+
+// scratch-storage 默认优先用 Web Worker 拉素材，但 scratch-gui 的预编译产物里
+// 没有随包发出 fetch-worker 这个 chunk，new Worker(...) 直接 404。
+// worker 起不来时它既不 reject 也不回退，storage.load 会永远 pending，
+// 表现就是「素材库点了没反应、也没有任何报错」。这里把 worker 工具摘掉，只留主线程 fetch。
+function useMainThreadFetch (st) {
+    const helper = st && st.webHelper;
+    if (!helper) return;
+    for (const key of ['assetTool', 'projectTool']) {
+        const tool = helper[key];
+        if (!tool || !Array.isArray(tool.tools) || tool.tools.length < 2) continue;
+        // FetchWorkerTool 是个代理壳，靠 inner 认出来；认不出就退而保留最后一个（FetchTool）
+        const kept = tool.tools.filter(t => t && !t.inner);
+        tool.tools = kept.length ? kept : [tool.tools[tool.tools.length - 1]];
+    }
 }
 
 function waitForVm () {

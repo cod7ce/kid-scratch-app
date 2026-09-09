@@ -3,7 +3,15 @@
 const { app } = require('electron');
 const store = require('./store');
 
-const log = (...a) => console.log('[自检]', ...a);
+const log = (...a) => {
+    console.log('[自检]', ...a);
+    // 管道里的 stdout 是缓冲的，跑挂时看不到进度；给个文件出口方便实时 tail
+    if (process.env.KID_LOG_FILE) {
+        try {
+            require('fs').appendFileSync(process.env.KID_LOG_FILE, `[自检] ${a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ')}\n`);
+        } catch (e) { /* 忽略 */ }
+    }
+};
 
 async function runSelfTest (win, origin) {
     const results = [];
@@ -102,11 +110,32 @@ async function runSelfTest (win, origin) {
             return { count: imgs.length, broken: imgs.filter(i => i.complete && i.naturalWidth === 0).length };
         })()`);
         check('官方素材库缩略图正常', thumbs.count > 50 && thumbs.broken === 0, thumbs);
-        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
-        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-        await new Promise(r => setTimeout(r, 800));
-        check('素材库可关闭', await win.webContents.executeJavaScript(
-            'document.querySelectorAll(\'[class*="library-item"]\').length === 0'));
+
+        // 真的从官方素材库选一个背景：storage.load 走的是另一条路，缩略图能显示不代表素材能加载
+        const stageCostumesBefore = await win.webContents.executeJavaScript(
+            'vm.runtime.getTargetForStage().getCostumes().length');
+        await win.webContents.executeJavaScript(`(() => {
+            const items = [...document.querySelectorAll('[class*="library-item_library-item"]')];
+            if (!items.length) return false;
+            items[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));
+            return true;
+        })()`);
+        await new Promise(r => setTimeout(r, 8000));
+        const libraryPick = await win.webContents.executeJavaScript(`(() => {
+            const stage = vm.runtime.getTargetForStage();
+            const cs = stage.getCostumes();
+            const last = cs[cs.length - 1] || {};
+            return {
+                count: cs.length,
+                name: last.name,
+                bytes: last.asset && last.asset.data ? last.asset.data.length : 0,
+                size: last.size || null,
+                modalClosed: document.querySelectorAll('[class*="library-item_library-item"]').length === 0
+            };
+        })()`);
+        check('官方素材能真的加载进来',
+            libraryPick.count === stageCostumesBefore + 1 && libraryPick.bytes > 1000, libraryPick);
+        check('选完素材后弹窗自动关闭', libraryPick.modalClosed);
 
         const add = await win.webContents.executeJavaScript(`(async () => {
             const before = window.vm.runtime.targets.length;
