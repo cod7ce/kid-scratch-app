@@ -1,7 +1,7 @@
 {
   "name": "kid-scratch-app",
   "productName": "小小创客",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "给孩子的 Scratch 图形化编程创作 App（本地运行 / 自动保存 / 儿童素材库）",
   "main": "electron/main.js",
   "private": true,
