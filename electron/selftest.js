@@ -158,6 +158,49 @@ async function runSelfTest (win, origin) {
         check('背景自动切换到新加的', add.stageShowingNewBackdrop);
         check('添加声音', add.sounds >= 1, add.sounds);
 
+        // 位图角色（我的素材里放的照片就是 PNG）走的是另一条路：先缩放再转 ImageBitmap，
+        // 之前只测过内置的 SVG，这里补上
+        const fs = require('fs');
+        const { nativeImage } = require('electron');
+        const { paths } = require('./paths');
+        const TEST_ASSET = '__自检临时位图角色';
+        const testPngPath = require('path').join(paths.myAssetsDir, '角色', `${TEST_ASSET}.png`);
+        const bmpW = 60, bmpH = 40;
+        const raw = Buffer.alloc(bmpW * bmpH * 4);
+        for (let i = 0; i < bmpW * bmpH; i++) {
+            raw[i * 4] = 0x40; raw[i * 4 + 1] = 0x90; raw[i * 4 + 2] = 0xf0; raw[i * 4 + 3] = 0xff;
+        }
+        fs.writeFileSync(testPngPath, nativeImage.createFromBitmap(raw, { width: bmpW, height: bmpH }).toPNG());
+        try {
+            const bmp = await win.webContents.executeJavaScript(`(async () => {
+                const lib = await fetch('/api/library?t=' + Date.now()).then(r => r.json());
+                const item = lib.sprites.find(s => s.name === ${JSON.stringify(TEST_ASSET)});
+                if (!item) return { error: '素材库里没扫到刚放进去的 PNG' };
+                const before = window.vm.runtime.targets.length;
+                await window.__kidTest.addSprite(item);
+                const t = window.vm.runtime.targets[window.vm.runtime.targets.length - 1];
+                const c = t.getCostumes()[0] || {};
+                return {
+                    added: window.vm.runtime.targets.length - before,
+                    name: t.getName(),
+                    dataFormat: c.dataFormat,
+                    size: c.size || null,
+                    // scratch-vm 会把 bitmapResolution:1 的位图内部放大到 2 倍并把分辨率标成 2，
+                    // 所以舞台上的实际尺寸是 size / bitmapResolution
+                    resolution: c.bitmapResolution,
+                    stageSize: c.size ? [c.size[0] / (c.bitmapResolution || 1), c.size[1] / (c.bitmapResolution || 1)] : null,
+                    bytes: c.asset && c.asset.data ? c.asset.data.length : 0
+                };
+            })()`);
+            check('照片类（PNG）角色也能加进来',
+                !bmp.error && bmp.added === 1 && bmp.dataFormat === 'png' && bmp.bytes > 0 &&
+                Array.isArray(bmp.stageSize) && bmp.stageSize[0] === bmpW && bmp.stageSize[1] === bmpH,
+                bmp);
+        } finally {
+            fs.rmSync(testPngPath, { force: true });
+        }
+
+
         // 先存一次，后面重开编辑器时才验证得了内容有没有完整落盘
         await win.webContents.executeJavaScript('window.__kidTest.save({force: true})');
 
