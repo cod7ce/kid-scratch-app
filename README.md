@@ -81,7 +81,7 @@ npm run fetch-assets -- 背景     # 也可以只下某一类：角色 / 造型 
 npm run selftest
 ```
 
-会真的启动一次 App，逐项验证：编辑器挂载、中文界面、WebGL 渲染、素材代理、官方素材库缩略图、**从官方素材库真的选一个背景并确认加载成功**、添加角色/背景/声音、自动保存链路、`.sb3` 落盘与读回、缩略图生成、版本号比较、Release 挑选逻辑。当前 24/24 通过。
+会真的启动一次 App，逐项验证：编辑器挂载、中文界面、WebGL 渲染、素材代理、官方素材库缩略图、**从官方素材库真的选一个背景并确认加载成功**、添加角色/背景/声音、自动保存链路、`.sb3` 落盘与读回、缩略图生成、版本号比较、Release 挑选逻辑、**真实鼠标点击返回作品墙 / 关窗不被 beforeunload 拦住**。当前 26/26 通过。
 
 打包后的 App 也能这么测：
 
@@ -158,6 +158,11 @@ npm run release
   `scratch-gui` 的预编译产物里却**没有随包发出 `chunks/fetch-worker.*.js`**，`new Worker(...)` 直接 404；
   worker 起不来时它既不 reject 也不回退，`storage.load()` 会永远 pending —— 表现就是「素材库点了没反应，也没有任何报错」。
   `editor.js` 的 `useMainThreadFetch()` 会把 worker 工具摘掉，只留主线程 fetch
+- **beforeunload**：scratch-gui 自带 `beforeunload`（原版用来提醒「有未保存的改动」）。Electron 遇到它时会发
+  `will-prevent-unload`，**如果没人处理就直接取消跳转和关窗，而且不弹任何提示** —— 表现为「点作品墙没反应、窗口也关不掉」。
+  主进程里统一放行（我们本来就在自动保存，离开前还会再强制存一次）。
+  这个坑只有**真实鼠标事件**才复现得出来：Chromium 要求 frame 有 sticky activation 才会走 beforeunload，
+  `executeJavaScript` 的 `userGesture` 参数不够；而且 scratch-gui 只在项目**有改动**时才挂 beforeunload
   - `/static/` 额外挂了一份 `dist/static`，因为 scratch-blocks 内部写死了相对路径 `./static/blocks-media/...`
 - **渲染进程** (`renderer/js/editor.js`)：用 UMD 方式加载 `scratch-gui.js`（它把 react / react-dom 作为外部依赖，读的是小写全局 `window.react`）
   - `projectId: 0` 让 GUI 加载内置的默认作品（离线）

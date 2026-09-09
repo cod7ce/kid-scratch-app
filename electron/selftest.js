@@ -213,6 +213,56 @@ async function runSelfTest (win, origin) {
         check('缩略图已生成', require('fs').existsSync(store.thumbPath(id)));
         check('元信息已更新', !!meta && meta.modified > 0);
 
+        // 离开编辑器：scratch-gui 自带 beforeunload，Electron 默认会把跳转/关窗直接取消。
+        // 必须用真实鼠标事件——只有真实输入才会产生 Chromium 要求的 sticky activation，
+        // executeJavaScript 的 userGesture 不够，不带真实点击就复现不出来。
+        const realClick = async selector => {
+            const at = await win.webContents.executeJavaScript(`(() => {
+                const el = document.querySelector(${JSON.stringify(selector)});
+                if (!el) return null;
+                const r = el.getBoundingClientRect();
+                return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+            })()`);
+            if (!at) throw new Error('找不到元素: ' + selector);
+            win.focus();
+            win.webContents.sendInputEvent({ type: 'mouseDown', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+            win.webContents.sendInputEvent({ type: 'mouseUp', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+        };
+
+        await win.loadURL(`${origin}/editor.html?id=${encodeURIComponent(id)}&locale=zh-cn`);
+        await waitFor('window.__kidEditorReady === true', 90000, '编辑器就绪(返回测试)');
+        // scratch-gui 只在「项目有改动」时才挂 beforeunload，所以先制造一次改动
+        await win.webContents.executeJavaScript('vm.runtime.emitProjectChanged(); true;');
+        await new Promise(r => setTimeout(r, 1500));
+        await realClick('#btn-home');
+        let backHome = false;
+        for (let i = 0; i < 8; i++) {
+            await new Promise(r => setTimeout(r, 1500));
+            if (await win.webContents.executeJavaScript('location.pathname').catch(() => '') === '/index.html') {
+                backHome = true;
+                break;
+            }
+        }
+        check('真实点击也能返回作品墙（beforeunload 不拦）', backHome);
+
+        // 关窗走同一套机制：先用真实点击给页面拿到 sticky activation，再关
+        await win.loadURL(`${origin}/editor.html?id=${encodeURIComponent(id)}&locale=zh-cn`);
+        await waitFor('window.__kidEditorReady === true', 90000, '编辑器就绪(关窗测试)');
+        await win.webContents.executeJavaScript('vm.runtime.emitProjectChanged(); true;');
+        await new Promise(r => setTimeout(r, 1500));
+        await realClick('#project-name');
+        await new Promise(r => setTimeout(r, 500));
+        await win.webContents.executeJavaScript("document.getElementById('rename-overlay').hidden = true; true;");
+        const closeStart = Date.now();
+        let closed = false;
+        win.once('closed', () => { closed = true; });
+        win.close();
+        for (let i = 0; i < 12; i++) {
+            await new Promise(r => setTimeout(r, 1000));
+            if (closed) break;
+        }
+        check('编辑器页能正常关窗', closed, closed ? { ms: Date.now() - closeStart } : '超过 12 秒未关闭');
+
         if (!process.env.KID_KEEP_TEST_PROJECT) await store.remove(id);
     } catch (e) {
         check('自检异常', false, e.message);

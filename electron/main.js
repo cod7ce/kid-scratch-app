@@ -60,6 +60,12 @@ async function boot () {
         }
     );
 
+    // scratch-gui 自带 beforeunload（原版用来提醒「有未保存的改动」）。
+    // Electron 遇到 beforeunload 时如果没人处理 will-prevent-unload，就会直接取消跳转/关窗，
+    // 而且不弹任何提示——表现为「点作品墙没反应、窗口也关不掉」。
+    // 我们本来就在自动保存，离开前还会再强制存一次，所以一律放行。
+    mainWindow.webContents.on('will-prevent-unload', e => e.preventDefault());
+
     mainWindow.once('ready-to-show', () => mainWindow.show());
     mainWindow.on('close', onWindowClose);
 
@@ -89,6 +95,8 @@ async function boot () {
 // 关窗前先让编辑器把当前进度存盘
 function onWindowClose (e) {
     if (allowClose || !mainWindow) return;
+    // 只有编辑器页才需要先落盘；在作品墙上直接关，不让用户干等
+    if (!mainWindow.webContents.getURL().includes('editor.html')) return;
     e.preventDefault();
     if (flushing) return;
     flushing = true;
@@ -97,7 +105,7 @@ function onWindowClose (e) {
         allowClose = true;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
     };
-    const timer = setTimeout(done, 6000);
+    const timer = setTimeout(done, 4000);
     ipcMain.once('app:flush-done', () => {
         clearTimeout(timer);
         done();
@@ -289,5 +297,5 @@ if (!app.requestSingleInstanceLock()) {
         dialog.showErrorBox('启动失败', String(err && err.stack || err));
         app.quit();
     });
-    app.on('window-all-closed', () => app.quit());
+    app.on('window-all-closed', () => { if (!isSelfTest) app.quit(); });
 }
