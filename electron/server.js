@@ -214,6 +214,13 @@ function createServer (opts) {
                 return notFound(res);
             }
 
+            // scratch-vm 加载自定义扩展时写死了 new Worker('./extension-worker.js')，
+            // 相对页面解析成 /extension-worker.js，所以根路径也要挂一份
+            if (pathname === '/extension-worker.js') {
+                if (await serveFile(res, path.join(guiDir, 'extension-worker.js'), { immutable: true })) return;
+                return notFound(res);
+            }
+
             if (pathname === '/api/library') {
                 const [builtin, user] = await Promise.all([
                     readBuiltinLibrary(builtinLibDir),

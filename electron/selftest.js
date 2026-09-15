@@ -137,6 +137,55 @@ async function runSelfTest (win, origin) {
             libraryPick.count === stageCostumesBefore + 1 && libraryPick.bytes > 1000, libraryPick);
         check('选完素材后弹窗自动关闭', libraryPick.modalClosed);
 
+        // 扩展 worker：scratch-vm 写死了相对路径 './extension-worker.js'
+        const workerStatus = await win.webContents.executeJavaScript(
+            "fetch('/extension-worker.js').then(r => r.status).catch(() => 0)");
+        check('扩展 worker 路径可用', workerStatus === 200, workerStatus);
+
+        // 调试面板：暂停 / 单步 / 慢动作 / 日志
+        const dbgResult = await win.webContents.executeJavaScript(`(async () => {
+            const T = window.__kidTest.debug;
+            const rt = window.vm.runtime;
+            const out = {};
+            T.toggle(true);
+
+            T.setPaused(true);
+            out.intervalCleared = rt._steppingInterval === null;
+            const s0 = T.state.steps;
+            await new Promise(r => setTimeout(r, 700));
+            out.frozenFrames = T.state.steps - s0;
+
+            T.step();
+            out.afterStep = T.state.steps - s0;
+
+            T.setPaused(false);
+            T.setSpeed('veryslow');
+            out.slowStepTime = rt.currentStepTime;
+            const s1 = T.state.steps;
+            await new Promise(r => setTimeout(r, 1500));
+            out.slowFrames = T.state.steps - s1;
+
+            T.setSpeed('normal');
+            const s2 = T.state.steps;
+            await new Promise(r => setTimeout(r, 700));
+            out.normalFrames = T.state.steps - s2;
+            out.running = rt._steppingInterval !== null;
+
+            rt.emit('SAY', window.vm.editingTarget, 'say', '自检说的话');
+            out.sayLogged = T.state.logs.some(l => l.kind === 'say' && l.text.includes('自检说的话'));
+
+            T.toggle(false);
+            return out;
+        })()`);
+        check('暂停能停住运行', dbgResult.intervalCleared && dbgResult.frozenFrames === 0, dbgResult);
+        check('单步只走一帧', dbgResult.afterStep === 1, dbgResult.afterStep);
+        check('慢动作确实变慢', dbgResult.slowStepTime === 600 && dbgResult.slowFrames >= 1 && dbgResult.slowFrames <= 4,
+            { stepTime: dbgResult.slowStepTime, frames1500ms: dbgResult.slowFrames });
+        check('恢复正常速度', dbgResult.running && dbgResult.normalFrames >= 10,
+            { frames700ms: dbgResult.normalFrames });
+        check('说的话进日志', dbgResult.sayLogged);
+
+
         const add = await win.webContents.executeJavaScript(`(async () => {
             const before = window.vm.runtime.targets.length;
             const lib = await fetch('/api/library').then(r => r.json());
@@ -221,6 +270,21 @@ async function runSelfTest (win, origin) {
             fs.mkdirSync(shotDir, { recursive: true });
             const img1 = await win.webContents.capturePage();
             fs.writeFileSync(path.join(shotDir, 'editor.png'), img1.toPNG());
+            await win.webContents.executeJavaScript(`(async () => {
+                const T = window.__kidTest.debug;
+                T.toggle(true);
+                T.log('run', '🏳️ 绿旗，开始！');
+                T.log('say', '小猫 说：你好，我要走 10 步啦');
+                T.log('var', '分数：0 → 1');
+                T.log('value', '点了一下积木，结果是：42');
+                T.setSpeed('slow');
+                return true;
+            })()`);
+            await new Promise(r => setTimeout(r, 900));
+            const imgDbg = await win.webContents.capturePage();
+            fs.writeFileSync(path.join(shotDir, 'debug.png'), imgDbg.toPNG());
+            await win.webContents.executeJavaScript(
+                "window.__kidTest.debug.setSpeed('normal'); window.__kidTest.debug.toggle(false); true;");
             await win.webContents.executeJavaScript("document.getElementById('btn-library').click(); true;");
             await new Promise(r => setTimeout(r, 1600));
             const img2 = await win.webContents.capturePage();

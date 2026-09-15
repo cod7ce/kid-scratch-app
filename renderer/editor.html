@@ -23,6 +23,7 @@
     </div>
 
     <div class="tb-right">
+        <button class="tb-btn" id="btn-debug"><span class="tb-ico">🐞</span><span class="tb-label">调试</span></button>
         <button class="tb-btn" id="btn-library"><span class="tb-ico">🧺</span><span class="tb-label">我的素材</span></button>
         <button class="tb-btn" id="btn-history"><span class="tb-ico">🕘</span><span class="tb-label">历史版本</span></button>
         <button class="tb-btn" id="btn-save"><span class="tb-ico">💾</span><span class="tb-label">保存</span></button>
@@ -37,6 +38,33 @@
     <div class="boot-text">正在准备积木…</div>
     <div class="boot-bar"><i></i></div>
 </div>
+
+<!-- 调试面板 -->
+<section class="dbg" id="dbg" hidden>
+    <header class="dbg-head" id="dbg-head">
+        <span class="dbg-title">🐞 调试</span>
+        <span class="dbg-hud">
+            <b id="dbg-fps">--</b> 帧/秒　<b id="dbg-threads">0</b> 个脚本在跑　<b id="dbg-clones">0</b> 个分身
+        </span>
+        <button class="dbg-x" id="dbg-close" title="关掉">✕</button>
+    </header>
+    <div class="dbg-controls">
+        <button class="dbg-btn dbg-main" id="dbg-pause">⏸ 暂停</button>
+        <button class="dbg-btn" id="dbg-step" disabled>⏭ 走一步</button>
+        <div class="dbg-speed">
+            <span>速度</span>
+            <button class="dbg-sp active" data-speed="normal">正常</button>
+            <button class="dbg-sp" data-speed="slow">慢</button>
+            <button class="dbg-sp" data-speed="veryslow">很慢</button>
+        </div>
+    </div>
+    <div class="dbg-log" id="dbg-log"></div>
+    <footer class="dbg-foot">
+        <label><input type="checkbox" id="dbg-record" checked> 记录</label>
+        <button class="dbg-link" id="dbg-clear">清空</button>
+        <span class="dbg-tip">「等待 N 秒」走的是真实时间，不会跟着变慢</span>
+    </footer>
+</section>
 
 <!-- 素材库 -->
 <div class="overlay" id="library-overlay" hidden>

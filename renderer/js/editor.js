@@ -567,6 +567,209 @@ document.addEventListener('keydown', e => {
 // 关窗前主进程会来要一次强制保存
 api.app.onFlushRequest(async () => { await save({ force: true }); });
 
+// ---------- 调试面板 ----------
+// scratch-vm 的步进就是 runtime 上的一个 setInterval（_steppingInterval），
+// 暂停 / 慢放 / 单步都是接管它。currentStepTime 只被响度、视频侦测等少数积木读取，改它是安全的。
+const dbg = {
+    open: false,
+    paused: false,
+    speed: 'normal',
+    recording: true,
+    logs: [],
+    steps: 0,
+    lastFpsAt: 0,
+    lastFpsSteps: 0
+};
+const DBG_SLOW = { normal: null, slow: 200, veryslow: 600 };
+const DBG_MAX_LOGS = 200;
+
+function dbgBaseInterval () {
+    const RT = vm.runtime.constructor;
+    return vm.runtime.compatibilityMode ? RT.THREAD_STEP_INTERVAL_COMPATIBILITY : RT.THREAD_STEP_INTERVAL;
+}
+
+// 按当前「暂停 / 速度」重建步进定时器
+function dbgApplyRun () {
+    const rt = vm.runtime;
+    if (rt._steppingInterval) {
+        clearInterval(rt._steppingInterval);
+        rt._steppingInterval = null;
+    }
+    if (dbg.paused) return;
+    const ms = DBG_SLOW[dbg.speed] || dbgBaseInterval();
+    rt.currentStepTime = ms;
+    rt._steppingInterval = setInterval(() => rt._step(), ms);
+}
+
+function dbgSetPaused (paused) {
+    dbg.paused = paused;
+    dbgApplyRun();
+    $('dbg-pause').textContent = paused ? '▶ 继续' : '⏸ 暂停';
+    $('dbg-step').disabled = !paused;
+    dbgLog('run', paused ? '⏸ 暂停了' : '▶ 继续运行');
+}
+
+function dbgStepOnce () {
+    if (!dbg.paused) return;
+    vm.runtime._step();
+    dbgLog('run', '⏭ 走了一步');
+}
+
+function dbgSetSpeed (speed) {
+    dbg.speed = speed;
+    for (const b of document.querySelectorAll('.dbg-sp')) {
+        b.classList.toggle('active', b.dataset.speed === speed);
+    }
+    dbgApplyRun();
+    dbgLog('run', `速度：${{ normal: '正常', slow: '慢', veryslow: '很慢' }[speed]}`);
+}
+
+function dbgLog (kind, text) {
+    if (!dbg.recording && kind !== 'run') return;
+    dbg.logs.push({ t: new Date(), kind, text });
+    if (dbg.logs.length > DBG_MAX_LOGS) dbg.logs.shift();
+    if (dbg.open) dbgRenderLog();
+}
+
+let dbgRenderQueued = false;
+function dbgRenderLog () {
+    if (dbgRenderQueued) return;
+    dbgRenderQueued = true;
+    requestAnimationFrame(() => {
+        dbgRenderQueued = false;
+        const box = $('dbg-log');
+        if (!dbg.logs.length) {
+            box.innerHTML = '<div class="dbg-empty">点绿旗跑一下，这里会显示发生了什么</div>';
+            return;
+        }
+        const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+        box.innerHTML = '';
+        for (const it of dbg.logs) {
+            const row = document.createElement('div');
+            row.className = 'dbg-row';
+            row.dataset.kind = it.kind;
+            const time = document.createElement('span');
+            time.className = 'dbg-time';
+            time.textContent = it.t.toLocaleTimeString('zh-CN', { hour12: false });
+            const msg = document.createElement('span');
+            msg.className = 'dbg-msg';
+            msg.textContent = it.text;
+            row.append(time, msg);
+            box.appendChild(row);
+        }
+        if (atBottom) box.scrollTop = box.scrollHeight;
+    });
+}
+
+// 变量是直接赋值改的，没有事件可订阅，所以定时快照对比
+let dbgVarSnapshot = new Map();
+function dbgPollVariables () {
+    if (!dbg.open || !dbg.recording || !vm) return;
+    const seen = new Set();
+    for (const target of vm.runtime.targets) {
+        if (!target.isOriginal) continue;
+        for (const v of Object.values(target.variables || {})) {
+            if (v.type === 'list') continue;
+            seen.add(v.id);
+            const prev = dbgVarSnapshot.get(v.id);
+            const now = String(v.value);
+            if (prev === undefined) {
+                dbgVarSnapshot.set(v.id, now);
+            } else if (prev !== now) {
+                dbgVarSnapshot.set(v.id, now);
+                dbgLog('var', `${v.name}：${prev} → ${now}`);
+            }
+        }
+    }
+    for (const id of [...dbgVarSnapshot.keys()]) if (!seen.has(id)) dbgVarSnapshot.delete(id);
+}
+
+function dbgUpdateHud () {
+    if (!dbg.open || !vm) return;
+    const now = performance.now();
+    if (dbg.lastFpsAt) {
+        const fps = ((dbg.steps - dbg.lastFpsSteps) * 1000) / (now - dbg.lastFpsAt);
+        $('dbg-fps').textContent = dbg.paused ? '暂停' : fps.toFixed(0);
+    }
+    dbg.lastFpsAt = now;
+    dbg.lastFpsSteps = dbg.steps;
+    $('dbg-threads').textContent = vm.runtime.threads.length;
+    $('dbg-clones').textContent = vm.runtime.targets.filter(t => !t.isOriginal).length;
+}
+
+function initDebug () {
+    const rt = vm.runtime;
+
+    // 统计真实帧率
+    const origStep = rt._step.bind(rt);
+    rt._step = () => {
+        dbg.steps++;
+        origStep();
+    };
+
+    // GUI 有时会自己再调一次 vm.start()，那样会用默认速度盖掉我们的设置
+    rt.on('RUNTIME_STARTED', () => {
+        if (dbg.paused || dbg.speed !== 'normal') setTimeout(dbgApplyRun, 0);
+    });
+
+    rt.on('SAY', (target, type, message) => {
+        const text = String(message == null ? '' : message).trim();
+        if (text) dbgLog('say', `${target.getName()} ${type === 'think' ? '想' : '说'}：${text}`);
+    });
+    vm.on('VISUAL_REPORT', report => dbgLog('value', `点了一下积木，结果是：${report.value}`));
+    vm.on('PROJECT_START', () => dbgLog('run', '🏳️ 绿旗，开始！'));
+    vm.on('PROJECT_RUN_STOP', () => dbgLog('run', '⏹ 所有脚本跑完了'));
+
+    const origError = console.error.bind(console);
+    console.error = (...a) => {
+        dbgLog('error', '出错了：' + a.map(x => (x && x.message) || String(x)).join(' ').slice(0, 200));
+        origError(...a);
+    };
+    window.addEventListener('error', e => dbgLog('error', '出错了：' + e.message));
+
+    setInterval(dbgPollVariables, 400);
+    setInterval(dbgUpdateHud, 500);
+
+    // 面板可以拖着走
+    const panel = $('dbg');
+    const head = $('dbg-head');
+    let drag = null;
+    head.addEventListener('pointerdown', e => {
+        if (e.target.closest('button')) return;
+        const r = panel.getBoundingClientRect();
+        drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+        head.setPointerCapture(e.pointerId);
+    });
+    head.addEventListener('pointermove', e => {
+        if (!drag) return;
+        const x = Math.max(8, Math.min(window.innerWidth - panel.offsetWidth - 8, e.clientX - drag.dx));
+        const y = Math.max(8, Math.min(window.innerHeight - panel.offsetHeight - 8, e.clientY - drag.dy));
+        panel.style.left = `${x}px`;
+        panel.style.top = `${y}px`;
+        panel.style.bottom = 'auto';
+    });
+    head.addEventListener('pointerup', () => { drag = null; });
+}
+
+function dbgToggle (open) {
+    dbg.open = open === undefined ? !dbg.open : open;
+    $('dbg').hidden = !dbg.open;
+    if (dbg.open) {
+        dbgRenderLog();
+        dbgUpdateHud();
+    }
+}
+
+$('btn-debug').addEventListener('click', () => dbgToggle());
+$('dbg-close').addEventListener('click', () => dbgToggle(false));
+$('dbg-pause').addEventListener('click', () => dbgSetPaused(!dbg.paused));
+$('dbg-step').addEventListener('click', dbgStepOnce);
+$('dbg-clear').addEventListener('click', () => { dbg.logs = []; dbgRenderLog(); });
+$('dbg-record').addEventListener('change', e => { dbg.recording = e.target.checked; });
+for (const b of document.querySelectorAll('.dbg-sp')) {
+    b.addEventListener('click', () => dbgSetSpeed(b.dataset.speed));
+}
+
 // 供自检脚本调用
 window.__kidDiag = () => ({
     vm: !!vm,
@@ -578,7 +781,8 @@ window.__kidDiag = () => ({
     guiChildren: document.getElementById('gui').children.length
 });
 
-window.__kidTest = { addSprite, addBackdrop, addSound, addCostumeToCurrent, save, getLibrary };
+window.__kidTest = { addSprite, addBackdrop, addSound, addCostumeToCurrent, save, getLibrary,
+    debug: { state: dbg, toggle: dbgToggle, setPaused: dbgSetPaused, step: dbgStepOnce, setSpeed: dbgSetSpeed, log: dbgLog } };
 
 // ---------- 启动 ----------
 (async () => {
@@ -594,6 +798,7 @@ window.__kidTest = { addSprite, addBackdrop, addSound, addCostumeToCurrent, save
     await new Promise(r => setTimeout(r, 400));
     ready = true;
     vm.on('PROJECT_CHANGED', markDirty);
+    initDebug();
     setStatus('saved', '已自动保存');
     lastSavedAt = Date.now();
 
