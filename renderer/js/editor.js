@@ -574,6 +574,7 @@ const dbg = {
     open: false,
     paused: false,
     speed: 'normal',
+    blockStep: false,
     recording: true,
     logs: [],
     steps: 0,
@@ -611,8 +612,10 @@ function dbgSetPaused (paused) {
 
 function dbgStepOnce () {
     if (!dbg.paused) return;
+    // 逐块模式：先把这一帧里剩下的积木一块一块走完，走完了再跑下一帧
+    if (dbg.blockStep && dbgAdvancePending()) return;
     vm.runtime._step();
-    dbgLog('run', '⏭ 走了一步');
+    if (!dbg.blockStep) dbgLog('run', '⏭ 走了一步');
 }
 
 function dbgSetSpeed (speed) {
@@ -622,6 +625,127 @@ function dbgSetSpeed (speed) {
     }
     dbgApplyRun();
     dbgLog('run', `速度：${{ normal: '正常', slow: '慢', veryslow: '很慢' }[speed]}`);
+}
+
+// ---- 逐块高亮 ----------------------------------------------------------
+// 说明：Scratch 的最小时间单位是「帧」，一帧里可能跑掉好几块积木，而且 sequencer 在
+// 线程 YIELD 时是「下一帧重跑同一块」（那是「等待」积木的语义），没法用来做单块推进。
+// 所以这里不去改执行，只记录每一帧真实执行过的积木顺序，再用 runtime.glowBlock
+// 一块一块点亮 —— 顺序和实际执行完全一致，且对作品行为零影响。
+let dbgPrimsPatched = false;
+let dbgGlowing = null;
+let dbgFrameBlocks = [];   // 当前这一帧执行过的积木（按顺序）
+let dbgPending = [];       // 暂停逐块时，这一帧里还没走到的积木
+let dbgPendingIdx = -1;
+let dbgPlayTimers = [];
+
+let dbgGlowEl = null;
+
+function dbgClearGlow () {
+    if (dbgGlowEl) {
+        dbgGlowEl.classList.remove('kid-stepglow');
+        dbgGlowEl = null;
+    }
+    dbgGlowing = null;
+}
+
+function dbgGlowId (id) {
+    if (id === dbgGlowing) return;
+    dbgClearGlow();
+    // 只高亮当前编辑的角色里的积木：scratch-blocks 对工作区里不存在的 id 会直接抛错
+    if (!id || !vm.editingTarget.blocks.getBlock(id)) return;
+    dbgGlowing = id;
+    // 积木 id 里有各种奇怪字符，不拼选择器，直接遍历比对最稳
+    for (const node of document.querySelectorAll('g.blocklyDraggable[data-id]')) {
+        if (node.getAttribute('data-id') === id) {
+            node.classList.add('kid-stepglow');
+            dbgGlowEl = node;
+            break;
+        }
+    }
+    // 手动单步时，如果高亮的积木在视口外（比如在自制积木的定义里），把代码区滚过去
+    if (dbg.paused) dbgRevealBlock(id, dbgGlowEl);
+}
+
+function dbgRevealBlock (id, el) {
+    try {
+        const ws = window.Blockly && window.Blockly.getMainWorkspace && window.Blockly.getMainWorkspace();
+        if (!ws || typeof ws.centerOnBlock !== 'function') return;
+        const canvas = document.querySelector('.blocklySvg');
+        if (el && canvas) {
+            const r = el.getBoundingClientRect();
+            const c = canvas.getBoundingClientRect();
+            if (r.top >= c.top && r.bottom <= c.bottom && r.left >= c.left && r.right <= c.right) return;
+        }
+        ws.centerOnBlock(id);
+    } catch (e) { /* 视图滚动失败无所谓 */ }
+}
+
+function dbgCancelPlay () {
+    for (const t of dbgPlayTimers) clearTimeout(t);
+    dbgPlayTimers = [];
+}
+
+function dbgOnFrameBlocks (list) {
+    dbgCancelPlay();
+    const ids = list.filter(b => b.target === vm.editingTarget && b.id).map(b => b.id);
+    if (dbg.paused) {
+        dbgPending = ids;
+        dbgPendingIdx = -1;
+        dbgAdvancePending();
+        return;
+    }
+    if (!ids.length) { dbgClearGlow(); return; }
+    // 连续运行时，把这一帧的积木均摊到这一帧的时长里依次点亮
+    const span = DBG_SLOW[dbg.speed] || dbgBaseInterval();
+    const each = Math.max(16, span / ids.length);
+    ids.forEach((id, i) => {
+        dbgPlayTimers.push(setTimeout(() => dbgGlowId(id), Math.round(i * each)));
+    });
+}
+
+function dbgAdvancePending () {
+    if (dbgPendingIdx + 1 >= dbgPending.length) return false;
+    dbgPendingIdx++;
+    dbgGlowId(dbgPending[dbgPendingIdx]);
+    return true;
+}
+
+function dbgPatchPrimitives () {
+    if (dbgPrimsPatched) return;
+    dbgPrimsPatched = true;
+    // 注意：execute.js 会把 runtime.getOpcodeFunction(opcode) 缓存进 BlockCached，
+    // 所以必须在任何积木跑起来之前替换，替换完还要把已有缓存清一遍。
+    const prims = vm.runtime._primitives;
+    for (const opcode of Object.keys(prims)) {
+        const orig = prims[opcode];
+        if (typeof orig !== 'function') continue;
+        prims[opcode] = function (args, util) {
+            if (dbg.blockStep && util && util.thread) {
+                dbgFrameBlocks.push({ id: util.thread.peekStack(), target: util.thread.target });
+            }
+            return orig.apply(this, arguments);
+        };
+    }
+    for (const target of vm.runtime.targets) {
+        if (target.blocks && target.blocks.resetCache) target.blocks.resetCache();
+    }
+    if (vm.runtime.flyoutBlocks && vm.runtime.flyoutBlocks.resetCache) vm.runtime.flyoutBlocks.resetCache();
+}
+
+function dbgSetBlockStep (on) {
+    dbg.blockStep = on;
+    dbgCancelPlay();
+    dbgPending = [];
+    dbgPendingIdx = -1;
+    if (!on) dbgClearGlow();
+    document.body.classList.toggle('kid-blockstep', on);
+    $('dbg-blockstep').classList.toggle('active', on);
+    $('dbg-step').textContent = on ? '⏭ 下一块' : '⏭ 走一步';
+    $('dbg-tip').textContent = on
+        ? '按真实执行顺序逐块点亮；只显示当前角色的积木'
+        : '「等待 N 秒」走的是真实时间，不会跟着变慢';
+    dbgLog('run', on ? '🔍 逐块高亮：开' : '🔍 逐块高亮：关');
 }
 
 function dbgLog (kind, text) {
@@ -699,12 +823,15 @@ function dbgUpdateHud () {
 
 function initDebug () {
     const rt = vm.runtime;
+    dbgPatchPrimitives();
 
     // 统计真实帧率
     const origStep = rt._step.bind(rt);
     rt._step = () => {
-        dbg.steps++;
+        if (dbg.blockStep) dbgFrameBlocks = [];
         origStep();
+        dbg.steps++;
+        if (dbg.blockStep) dbgOnFrameBlocks(dbgFrameBlocks);
     };
 
     // GUI 有时会自己再调一次 vm.start()，那样会用默认速度盖掉我们的设置
@@ -718,7 +845,7 @@ function initDebug () {
     });
     vm.on('VISUAL_REPORT', report => dbgLog('value', `点了一下积木，结果是：${report.value}`));
     vm.on('PROJECT_START', () => dbgLog('run', '🏳️ 绿旗，开始！'));
-    vm.on('PROJECT_RUN_STOP', () => dbgLog('run', '⏹ 所有脚本跑完了'));
+    vm.on('PROJECT_RUN_STOP', () => { dbgLog('run', '⏹ 所有脚本跑完了'); dbgCancelPlay(); dbgClearGlow(); });
 
     const origError = console.error.bind(console);
     console.error = (...a) => {
@@ -754,6 +881,7 @@ function initDebug () {
 function dbgToggle (open) {
     dbg.open = open === undefined ? !dbg.open : open;
     $('dbg').hidden = !dbg.open;
+    if (!dbg.open) { dbgCancelPlay(); dbgClearGlow(); }
     if (dbg.open) {
         dbgRenderLog();
         dbgUpdateHud();
@@ -764,6 +892,7 @@ $('btn-debug').addEventListener('click', () => dbgToggle());
 $('dbg-close').addEventListener('click', () => dbgToggle(false));
 $('dbg-pause').addEventListener('click', () => dbgSetPaused(!dbg.paused));
 $('dbg-step').addEventListener('click', dbgStepOnce);
+$('dbg-blockstep').addEventListener('click', () => dbgSetBlockStep(!dbg.blockStep));
 $('dbg-clear').addEventListener('click', () => { dbg.logs = []; dbgRenderLog(); });
 $('dbg-record').addEventListener('change', e => { dbg.recording = e.target.checked; });
 for (const b of document.querySelectorAll('.dbg-sp')) {
@@ -782,7 +911,8 @@ window.__kidDiag = () => ({
 });
 
 window.__kidTest = { addSprite, addBackdrop, addSound, addCostumeToCurrent, save, getLibrary,
-    debug: { state: dbg, toggle: dbgToggle, setPaused: dbgSetPaused, step: dbgStepOnce, setSpeed: dbgSetSpeed, log: dbgLog } };
+    debug: { state: dbg, toggle: dbgToggle, setPaused: dbgSetPaused, step: dbgStepOnce, setSpeed: dbgSetSpeed,
+        log: dbgLog, setBlockStep: dbgSetBlockStep, glowing: () => dbgGlowing } };
 
 // ---------- 启动 ----------
 (async () => {

@@ -55,6 +55,8 @@ npm start       # 打开 App
 - ⏸ **暂停 / ▶ 继续 / ⏭ 走一步** —— 接管 scratch-vm 的步进定时器，「走一步」精确推进一帧
 - 🐢 **慢动作**（正常 / 慢 200ms / 很慢 600ms 一帧）—— 小孩能看清积木一步步在干嘛
 - 📋 **日志** —— 绿旗开始、角色说了什么、变量怎么变的、点积木看到的值、运行报错，都按时间列出来
+- 🔍 **逐块高亮** —— 按真实执行顺序，一块一块给当前积木描边；暂停后点「下一块」逐块往下走，
+  积木在视口外会自动把代码区滚过去
 - 📊 **HUD** —— 真实帧率、正在跑的脚本数、分身数
 - 面板可以拖着走；「记录」可关掉
 
@@ -91,7 +93,7 @@ npm run fetch-assets -- 背景     # 也可以只下某一类：角色 / 造型 
 npm run selftest
 ```
 
-会真的启动一次 App，逐项验证：编辑器挂载、中文界面、WebGL 渲染、素材代理、官方素材库缩略图、**从官方素材库真的选一个背景并确认加载成功**、添加角色/背景/声音、自动保存链路、`.sb3` 落盘与读回、缩略图生成、版本号比较、Release 挑选逻辑、真实鼠标点击返回作品墙 / 关窗不被 beforeunload 拦住、**调试面板的暂停 / 单步 / 慢动作 / 日志**。当前 33/33 通过。
+会真的启动一次 App，逐项验证：编辑器挂载、中文界面、WebGL 渲染、素材代理、官方素材库缩略图、**从官方素材库真的选一个背景并确认加载成功**、添加角色/背景/声音、自动保存链路、`.sb3` 落盘与读回、缩略图生成、版本号比较、Release 挑选逻辑、真实鼠标点击返回作品墙 / 关窗不被 beforeunload 拦住、**调试面板的暂停 / 单步 / 慢动作 / 日志 / 逐块高亮**。当前 38/38 通过。
 
 打包后的 App 也能这么测：
 
@@ -175,6 +177,16 @@ npm run release
   `currentStepTime` 只被响度、视频侦测等少数积木读取，跟着改是安全的。
   日志来自 `SAY` / `VISUAL_REPORT` / `PROJECT_START` / `PROJECT_RUN_STOP` 事件；
   变量没有变更事件，所以是每 400ms 快照对比
+- **逐块高亮为什么是「记录+回放」而不是真的单块执行**：sequencer 在线程 `STATUS_YIELD` 时是
+  **下一帧重跑同一块**（那是「等待」积木的语义），不会推进；而在 primitive 里自己推栈又会破坏
+  `handleReport` 依赖的栈状态。所以改成包一层 primitive **只记录**每帧真实执行过的积木顺序，
+  再按顺序描边——顺序与实际执行完全一致，对作品行为零影响。
+  另外要注意 `execute.js` 会把 `runtime.getOpcodeFunction(opcode)` 缓存进 `BlockCached`，
+  所以 primitive 必须在任何积木跑起来之前替换，替换完还要 `blocks.resetCache()`
+- **描边怎么画的**：scratch-blocks 里单块是 `g.blocklyDraggable[data-id]`，给它的
+  `path.blocklyBlockBackground` 加描边即可；Scratch 自带的「整段脚本发光」是顶层 g 上的
+  `StackGlow` 滤镜，逐块时用 CSS 压掉，否则整条脚本都是黄框、看不出单块。
+  滚动视图用 `window.Blockly.getMainWorkspace().centerOnBlock(id)`
 - **beforeunload**：scratch-gui 自带 `beforeunload`（原版用来提醒「有未保存的改动」）。Electron 遇到它时会发
   `will-prevent-unload`，**如果没人处理就直接取消跳转和关窗，而且不弹任何提示** —— 表现为「点作品墙没反应、窗口也关不掉」。
   主进程里统一放行（我们本来就在自动保存，离开前还会再强制存一次）。

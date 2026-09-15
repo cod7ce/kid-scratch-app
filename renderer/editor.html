@@ -51,6 +51,7 @@
     <div class="dbg-controls">
         <button class="dbg-btn dbg-main" id="dbg-pause">⏸ 暂停</button>
         <button class="dbg-btn" id="dbg-step" disabled>⏭ 走一步</button>
+        <button class="dbg-btn dbg-toggle" id="dbg-blockstep" title="让每块积木各占一帧，并在代码区高亮它">🔍 逐块</button>
         <div class="dbg-speed">
             <span>速度</span>
             <button class="dbg-sp active" data-speed="normal">正常</button>
@@ -62,7 +63,7 @@
     <footer class="dbg-foot">
         <label><input type="checkbox" id="dbg-record" checked> 记录</label>
         <button class="dbg-link" id="dbg-clear">清空</button>
-        <span class="dbg-tip">「等待 N 秒」走的是真实时间，不会跟着变慢</span>
+        <span class="dbg-tip" id="dbg-tip">「等待 N 秒」走的是真实时间，不会跟着变慢</span>
     </footer>
 </section>
 

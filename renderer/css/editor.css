@@ -325,3 +325,17 @@
 .dbg-foot label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
 .dbg-link { color: var(--purple); font-weight: 800; text-decoration: underline; font-size: 12px; }
 .dbg-tip { margin-left: auto; opacity: .8; font-size: 11px; }
+
+.dbg-toggle { background: #f1ecff; }
+.dbg-toggle.active { background: var(--sky); color: #fff; }
+.dbg-toggle.active:hover:not(:disabled) { background: var(--sky); filter: brightness(1.05); }
+
+/* 逐块高亮：给当前执行的那一块描边。
+   Scratch 自带的「整段脚本发光」是顶层 g 上的 StackGlow 滤镜，逐块时把它压掉，
+   否则整条脚本都是黄框，单块高亮看不出来。 */
+.blocklyDraggable.kid-stepglow > path.blocklyBlockBackground {
+    stroke: #ff2d6f !important;
+    stroke-width: 4px !important;
+    filter: drop-shadow(0 0 5px rgba(255, 45, 111, .9));
+}
+body.kid-blockstep g[filter*="StackGlow"] { filter: none !important; }

@@ -185,6 +185,90 @@ async function runSelfTest (win, origin) {
             { frames700ms: dbgResult.normalFrames });
         check('说的话进日志', dbgResult.sayLogged);
 
+        // 逐块高亮：加一个带 6 块积木的角色，验证「暂停 + 下一块」能按真实执行顺序一块块走
+        const stepResult = await win.webContents.executeJavaScript(`(async () => {
+            const T = window.__kidTest.debug;
+            const rt = window.vm.runtime;
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+            const N = 6;
+
+            // 用标准 sb3 格式喂给 addSprite，让反序列化器自己建积木
+            const blocks = {
+                zt_hat: {opcode: 'event_whenflagclicked', next: 'zt_m0', parent: null,
+                         inputs: {}, fields: {}, shadow: false, topLevel: true, x: 40, y: 40}
+            };
+            for (let i = 0; i < N; i++) {
+                blocks['zt_m' + i] = {
+                    opcode: 'motion_movesteps',
+                    next: i === N - 1 ? null : 'zt_m' + (i + 1),
+                    parent: i === 0 ? 'zt_hat' : 'zt_m' + (i - 1),
+                    inputs: {STEPS: [1, [4, '1']]}, fields: {}, shadow: false, topLevel: false
+                };
+            }
+            await window.vm.addSprite(JSON.stringify({
+                name: '__自检逐块', isStage: false, x: 0, y: 0, visible: false, size: 100,
+                direction: 90, rotationStyle: 'all around', draggable: false, currentCostume: 0,
+                volume: 100, blocks, variables: {}, lists: {}, broadcasts: {}, sounds: [],
+                costumes: [{name: 'c', assetId: 'cd21514d0531fdffb22204e0ec5ed84a',
+                            md5ext: 'cd21514d0531fdffb22204e0ec5ed84a.svg', dataFormat: 'svg',
+                            bitmapResolution: 1, rotationCenterX: 240, rotationCenterY: 180}]
+            }));
+            await sleep(400);
+            const sprite = rt.targets[rt.targets.length - 1];
+            window.vm.setEditingTarget(sprite.id);
+            await sleep(200);
+            const editingOk = window.vm.editingTarget === sprite;
+
+            // 1) 逐块高亮不应该改变作品本身的运行速度
+            T.setBlockStep(true);
+            T.setPaused(false);
+            const f0 = T.state.steps;
+            rt.greenFlag();
+            for (let i = 0; i < 100 && rt.threads.length; i++) await sleep(40);
+            const framesToFinish = T.state.steps - f0;
+
+            // 2) 暂停后，连点「下一块」应该按执行顺序逐块走
+            rt.stopAll();
+            T.setPaused(true);
+            await sleep(200);
+            rt.greenFlag();
+            const seen = [];
+            let domGlow = 0;
+            for (let i = 0; i < 10; i++) {
+                T.step();
+                await sleep(50);
+                const g = T.glowing();
+                if (g && seen[seen.length - 1] !== g) seen.push(g);
+                domGlow = Math.max(domGlow, document.querySelectorAll('.kid-stepglow').length);
+            }
+
+            T.setPaused(false);
+            T.setBlockStep(false);
+            rt.stopAll();
+            window.vm.deleteSprite(sprite.id);
+            await sleep(200);
+
+            const want = [];
+            for (let i = 0; i < N; i++) want.push('zt_m' + i);
+            return {
+                积木数: N,
+                选中了测试角色: editingOk,
+                跑完用了几帧: framesToFinish,
+                逐块走过的积木: seen,
+                顺序正确: seen.join(',') === want.join(','),
+                代码区里描边的积木数: domGlow,
+                高亮已清干净: T.glowing() === null
+            };
+        })()`);
+        check('逐块高亮不影响作品运行速度', stepResult.选中了测试角色 && stepResult.跑完用了几帧 <= 2,
+            { editing: stepResult.选中了测试角色, frames: stepResult.跑完用了几帧 });
+        check('暂停后能一块一块往下走', stepResult.顺序正确, stepResult.逐块走过的积木);
+        check('六块积木都被单独点亮', stepResult.逐块走过的积木.length === stepResult.积木数,
+            stepResult.逐块走过的积木.length);
+        check('代码区里同时只描边一块', stepResult.代码区里描边的积木数 === 1, stepResult.代码区里描边的积木数);
+        check('关掉后高亮被清干净', stepResult.高亮已清干净);
+
+
 
         const add = await win.webContents.executeJavaScript(`(async () => {
             const before = window.vm.runtime.targets.length;
